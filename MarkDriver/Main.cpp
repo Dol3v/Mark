@@ -8,7 +8,7 @@
 #include "ProcessUtils.h"
 
 
-Globals g_Globals;
+Globals g_Globals = { 0 };
 
 extern "C"
 NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING) {
@@ -45,27 +45,6 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING) {
 		registeredThreadCallback = true;
 
 		LOG_SUCCESS("Finished driver initialization");
-
-		/*
-			kill the process for the chain to start
-		*/ 
-		
-		// remove protecting callbacks
-		/*status = Protections::RemoveProtectingObjectCallbacks(PROTECTING_DRIVER);
-		BREAK_ON_ERROR(status, "Failed to remove object callbacks");*/
-
-		auto* process = GetProcessByName(PROCESS_NAME_NARROW);
-		if (process == nullptr) {
-			LOG_FAIL_VA("Failed to find process %s by name", PROCESS_NAME_NARROW);
-			break;
-		}
-
-		status = Protections::RemovePsProtection(process, g_Globals.Network.PrevProtectionLevel);
-		BREAK_ON_ERROR(status, "Failed to remove PPL");
-
-		status = KillProcess(process);
-		BREAK_ON_ERROR(status, "Failed to kill process");
-		LOG_SUCCESS("Successfully killed process");
 	} while (false);
 
 	if (!NT_SUCCESS(status)) {
