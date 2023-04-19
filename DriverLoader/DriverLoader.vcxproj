@@ -108,6 +108,7 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalOptions>/VERBOSE %(AdditionalOptions)</AdditionalOptions>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -128,12 +129,19 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="DriverLoader.cpp" />
+    <ClCompile Include="DriverLoaderShellcode2.cpp" />
+    <ClCompile Include="KernelPrimitives.cpp" />
+    <ClCompile Include="RunShellcode.cpp" />
+    <ClCompile Include="Utils.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="DriverLoaderShellcode2.h" />
     <ClInclude Include="EneDriver.h" />
     <ClInclude Include="AutoHandle.h" />
     <ClInclude Include="KernelPrimitives.h" />
     <ClInclude Include="Palette.h" />
+    <ClInclude Include="RunShellcode.h" />
+    <ClInclude Include="Utils.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

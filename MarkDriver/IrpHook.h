@@ -5,6 +5,7 @@
 #include "Vector.h"
 #include "Mutex.h"
 
+
 /*
 	Handles IRP handlers hooking.
 */
@@ -32,9 +33,9 @@ public:
 	NTSTATUS HookIrpHandler(const PUNICODE_STRING DriverName, ULONG MajorFunction, PDRIVER_DISPATCH NewIrpHandler, PIO_COMPLETION_ROUTINE CompletionRoutine = nullptr, PVOID CompletionContext = nullptr);
 
 	/*
-		Installs a completion routine on any IOCTL IRP that reaches the driver.
+		Installs a completion routine on any IRP that reaches the driver.
 	*/
-	NTSTATUS InstallCompletionRoutine(const PUNICODE_STRING DriverName, PIO_COMPLETION_ROUTINE CompletionRoutine, PVOID CompletionContext);
+	NTSTATUS InstallCompletionRoutine(const PUNICODE_STRING DriverName, PIO_COMPLETION_ROUTINE CompletionRoutine, PVOID CompletionContext, ULONG MajorFunction);
 
 	/*
 		Restores the original handler for an IRP handler.

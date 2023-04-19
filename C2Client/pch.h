@@ -9,5 +9,7 @@
 
 // add headers that you want to pre-compile here
 #include "framework.h"
+#include <WinSock2.h>
+#include <WS2tcpip.h>
 
 #endif //PCH_H

@@ -6,7 +6,6 @@
 
 namespace Ppl {
 
-
 	/*
 		Returns the offset of the Protection field of EPROCESS.
 

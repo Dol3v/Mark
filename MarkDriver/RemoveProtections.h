@@ -3,8 +3,24 @@
 #include <ntifs.h>
 
 #include "Ppl.h"
+#include "Mutex.h"
+
 
 namespace Protections {
+
+	class ProtectionRemover {
+	public:
+		ProtectionRemover();
+
+		NTSTATUS RemoveProcessProtection(ULONG Pid);
+
+		NTSTATUS RestoreProcessProtection(ULONG Pid);
+
+		~ProtectionRemover();
+	private:
+		LIST_ENTRY unprotectedProcesses;
+		Mutex listMutex;
+	};
 
 	/*
 		Remove Ppl protections from a process; additionally returns the previous protection of the process.

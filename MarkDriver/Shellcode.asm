@@ -8,6 +8,7 @@ TITLE LoadLibrary shellcode
 GetShellcodeSize PROC
     xor rax, rax
     mov eax, (shellcode_end - offset RunShellcode)
+    ret
 GetShellcodeSize ENDP
 
 CreateShellcodeThread PROC

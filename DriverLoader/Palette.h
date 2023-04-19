@@ -1,7 +1,8 @@
 #pragma once
 
-#include <WinUser.h>
+#include <Windows.h>
 #include <wingdi.h>
+#include <WinUser.h>
 
 /*
 	Functions/definitions relating to palettes

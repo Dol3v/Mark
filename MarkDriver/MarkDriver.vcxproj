@@ -99,9 +99,12 @@
   <ItemGroup>
     <ClCompile Include="Apc.cpp" />
     <ClCompile Include="IrpHook.cpp" />
+    <ClCompile Include="Keylogging.cpp" />
     <ClCompile Include="Main.cpp" />
+    <ClCompile Include="Memory.cpp" />
     <ClCompile Include="Ppl.cpp" />
     <ClCompile Include="ProcessUtils.cpp" />
+    <ClCompile Include="ReflectiveLoader.cpp" />
     <ClCompile Include="RemoveProtections.cpp" />
     <ClCompile Include="Utils.cpp" />
   </ItemGroup>
@@ -116,12 +119,14 @@
     <ClInclude Include="Keylogging.h" />
     <ClInclude Include="Macros.h" />
     <ClInclude Include="MarkDriver.h" />
+    <ClInclude Include="Memory.h" />
     <ClInclude Include="ModuleFinder.h" />
     <ClInclude Include="Mutex.h" />
     <ClInclude Include="PoolPointer.h" />
     <ClInclude Include="Ppl.h" />
     <ClInclude Include="ProcessUtils.h" />
     <ClInclude Include="PushLock.h" />
+    <ClInclude Include="ReflectiveLoader.h" />
     <ClInclude Include="RemoveProtections.h" />
     <ClInclude Include="Shellcode.h" />
     <ClInclude Include="Utils.h" />

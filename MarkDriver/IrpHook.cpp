@@ -3,13 +3,21 @@
 #include "AutoLock.h"
 #include "Utils.h"
 
+ULONG MANAGER_INSTANCES = 0;
+
 IrpHookManager::IrpHookManager() {
+	if (MANAGER_INSTANCES != 0) {
+		LOG_FAIL("Tried to create more than one hook manager");
+		ExRaiseStatus(STATUS_ALREADY_INITIALIZED);
+	}
 	::InitializeListHead(&this->hooksHead);
 	this->mutex.Init();
+	MANAGER_INSTANCES = 1;
 }
 
 NTSTATUS IrpHookManager::HookIrpHandler(const PUNICODE_STRING DriverName, ULONG MajorFunction, PDRIVER_DISPATCH NewIrpHandler, 
 	PIO_COMPLETION_ROUTINE CompletionRoutine, PVOID CompletionContext) {
+
 	if (MajorFunction >= IRP_MJ_MAXIMUM_FUNCTION) {
 		LOG_FAIL_VA("Invalid major function %ul", MajorFunction);
 		return STATUS_INVALID_PARAMETER;
@@ -53,7 +61,7 @@ NTSTATUS SetCompletionRoutineIoctlHook(PDEVICE_OBJECT DeviceObject, PIRP Irp) {
 	const IrpHookManager::HookState* matchingHookState = nullptr;
 
 	{
-		AutoLock<Mutex> lock();
+		AutoLock<Mutex> lock(g_Globals.HookManager->mutex);
 		while (entry != &listHead) {
 			// find matching installed hook
 			const auto* hook = CONTAINING_RECORD(entry, IrpHookManager::HookState, Entry);
@@ -78,8 +86,8 @@ NTSTATUS SetCompletionRoutineIoctlHook(PDEVICE_OBJECT DeviceObject, PIRP Irp) {
 	return matchingHookState->OriginalHandler(DeviceObject, Irp);
 }
 
-NTSTATUS IrpHookManager::InstallCompletionRoutine(const PUNICODE_STRING DriverName, PIO_COMPLETION_ROUTINE CompletionRoutine, PVOID CompletionContext) {
-	return this->HookIrpHandler(DriverName, IRP_MJ_DEVICE_CONTROL, SetCompletionRoutineIoctlHook, CompletionRoutine, CompletionContext);
+NTSTATUS IrpHookManager::InstallCompletionRoutine(const PUNICODE_STRING DriverName, PIO_COMPLETION_ROUTINE CompletionRoutine, PVOID CompletionContext, ULONG MajorFunction) {
+	return this->HookIrpHandler(DriverName, MajorFunction, SetCompletionRoutineIoctlHook, CompletionRoutine, CompletionContext);
 }
 
 

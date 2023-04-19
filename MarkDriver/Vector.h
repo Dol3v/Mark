@@ -85,9 +85,14 @@ public:
 
 		Raises STATUS_INSUFFICENT_RESOURCES if allocation failed
 	*/
-	void Insert(const T& Element) {
+	void Insert(const T& Element, bool ShouldIncrease = true) {
 		if (elements == capacity) {
-			this->IncreaseTo(EXPANSION_SIZE * this->capacity);
+			if (ShouldIncrease) {
+				this->IncreaseTo(EXPANSION_SIZE * this->capacity);
+			}
+			else {
+				this->Clear();
+			}
 		}
 		this->buffer[this->elements++] = Element;
 	}
@@ -125,7 +130,20 @@ public:
 		auto amountToIncrease = NumberOfElements - (this->capacity - this->elements);
 		if (amountToIncrease > 0) {
 			this->IncreaseTo(this->elements + amountToIncrease);
+		} 
+	}
+
+	/*
+		Saves only the [Start, End) entries specified.
+	*/
+	void SubVec(size_t Start, size_t End) {
+		if (Start > End || End > this->elements)
+			ExRaiseStatus(STATUS_INDEX_OUT_OF_BOUNDS);
+		for (size_t i = Start; i < End; ++i) {
+			memcpy(buffer + (i - Start), buffer + i, sizeof(T));
 		}
+		RtlZeroMemory(buffer + End, (elements - End + 1) * sizeof(T));
+		this->elements = End - Start;
 	}
 
 	auto GetBuffer() {
@@ -163,5 +181,11 @@ private:
 		::ExFreePoolWithTag(this->buffer, PoolTag);
 		this->buffer = newBuffer;
 		this->capacity = Amount;
+	}
+
+	// Clears all elements in the buffer
+	void Clear() {
+		RtlZeroMemory(buffer, elements * sizeof(T));
+		elements = 0;
 	}
 };
