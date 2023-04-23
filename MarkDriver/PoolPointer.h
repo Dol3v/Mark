@@ -26,16 +26,9 @@ public:
 		this->size = BufferSize;
 	}
 
-	PoolPointer(const PoolPointer& Other) {
-		this->ptr = Other.ptr;
-	}
 
-	PoolPointer& operator=(const PoolPointer& Other) {
-		this->Free();
-		this->ptr = Other.ptr;
-		this->size = Other.size;
-		return *this;
-	}
+	PoolPointer(const PoolPointer& Other) = delete;
+	PoolPointer& operator=(const PoolPointer& Other) = delete;
 
 	PoolPointer(PoolPointer&& Other) {
 		this->ptr = Other.ptr;
