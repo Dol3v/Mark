@@ -16,6 +16,7 @@ An ~~amazingly bad~~ Windows kernel rootkit, built as a final project for the Cy
     * `EndKeylogging` - self explantory
     * `InjectLibrary` - injects a dll into a (potentially protected) process
     * `RunKmShellcode` - runs km shellcode and returns the result
+4. Have fun!
 
 ## Features
 The rootkit features several cool features, such as
@@ -50,9 +51,7 @@ _Case in point_
  * Add heartbeat functionality
  * Finally get to work on weaponizing an SMI handler exploit for an HVCI bypass
  * idk, persistence? :joy:
-
-## Why so bad?
-Here are some points for improvement:
+Some problems with the current design that need to be fixed:
  * The load-library from remote feature is cool, but it literally drops the dll to `%TEMP%`
  * The kernel-keylogging method employed is easily detected[^kernel-keylogging-dis].
 
