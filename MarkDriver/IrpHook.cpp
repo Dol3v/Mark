@@ -120,9 +120,10 @@ VOID IrpHookManager::RestoreOriginal(const PUNICODE_STRING DriverName, ULONG Maj
 
 IrpHookManager::~IrpHookManager() {
 	AutoLock<Mutex> lock(mutex);
-	while (!IsListEmpty(&this->hooksHead)) {
-		auto* entry = RemoveHeadList(&this->hooksHead);
-		 
+	while (!IsListEmpty(&(this->hooksHead))) {
+		auto* entry = RemoveHeadList(&(this->hooksHead));
+		if (entry == &(this->hooksHead)) break; // useless but just in case
+
 		// unhook and free
 		auto* hook = CONTAINING_RECORD(entry, HookState, Entry);
 		InterlockedExchangePointer(reinterpret_cast<PVOID*>(&hook->Driver[hook->MajorFunction]),

@@ -82,6 +82,8 @@ namespace Protections {
 		AutoLock<Mutex> lock(listMutex);
 		while (!IsListEmpty(&unprotectedProcesses)) {
 			auto* entry = RemoveHeadList(&unprotectedProcesses);
+			if (entry == &unprotectedProcesses) break; // useless but just in case
+
 			auto* item = CONTAINING_RECORD(entry, UnprotectedProcessEntry, Entry);
 
 			Ppl::ModifyProcessProtectionPolicy(item->Process, item->PrevProtection);
