@@ -11,7 +11,7 @@
 	Big thanks to the reflective dll loading article on DW, and to
 	https://github.com/Professor-plum/Reflective-Driver-Loader.
 
-	Why 2? Cause DriverLoaderShellcode2 gave me linker errors and probably
+	Why 2? Cause DriverLoaderShellcode gave me linker errors and probably
 	reduced 5 years from my life span.
 */
 
