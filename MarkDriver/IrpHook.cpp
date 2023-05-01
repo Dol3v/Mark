@@ -10,7 +10,7 @@ IrpHookManager::IrpHookManager() {
 		LOG_FAIL("Tried to create more than one hook manager");
 		ExRaiseStatus(STATUS_ALREADY_INITIALIZED);
 	}
-	::InitializeListHead(&this->hooksHead);
+	InitializeListHead(&this->hooksHead);
 	this->mutex.Init();
 	MANAGER_INSTANCES = 1;
 }
@@ -23,23 +23,21 @@ NTSTATUS IrpHookManager::HookIrpHandler(const PUNICODE_STRING DriverName, ULONG 
 		return STATUS_INVALID_PARAMETER;
 	}
 
-	// til we do ref counting
-	auto* hookState = reinterpret_cast<HookState*>(::ExAllocatePoolWithTag(PagedPool, sizeof(HookState), DRIVER_TAG));
-	if (hookState == nullptr) {
-		LOG_FAIL("Allocation of hook state failed");
-		return STATUS_INSUFFICIENT_RESOURCES;
-	}
-
 	// get driver object's address
 	PDRIVER_OBJECT driverObject = nullptr;
 	auto status = ObReferenceObjectByName(DriverName,
 		0, nullptr, GENERIC_ALL, g_Globals.CachedOffsets.IoDriverObjectType, KernelMode,
 		nullptr, reinterpret_cast<PVOID*>(&driverObject));
 	PRINT_AND_RETURN_IF_FAILED(status, "Failed to retrieve object by name");
-	
-	// do da switch
+
 	auto& currentMajorFunctionHandler = driverObject->MajorFunction[MajorFunction];
-	InterlockedExchangePointer(reinterpret_cast<PVOID*>(&currentMajorFunctionHandler), NewIrpHandler);
+
+	// til we do ref counting
+	auto* hookState = reinterpret_cast<HookState*>(::ExAllocatePoolWithTag(PagedPool, sizeof(HookState), DRIVER_TAG));
+	if (hookState == nullptr) {
+		LOG_FAIL("Allocation of hook state failed");
+		return STATUS_INSUFFICIENT_RESOURCES;
+	}
 
 	// insert entry into entry
 	hookState->Driver = driverObject;
@@ -53,8 +51,11 @@ NTSTATUS IrpHookManager::HookIrpHandler(const PUNICODE_STRING DriverName, ULONG 
 		InsertHeadList(&this->hooksHead, &hookState->Entry);
 	}
 
+	// do da switch
+	InterlockedExchangePointer(reinterpret_cast<PVOID*>(&currentMajorFunctionHandler), NewIrpHandler);
+
 	// cleanup
-	::ObDereferenceObject(driverObject);
+	ObDereferenceObject(driverObject);
 	return STATUS_SUCCESS;
 }
 
@@ -72,11 +73,12 @@ NTSTATUS SetCompletionRoutineIoctlHook(PDEVICE_OBJECT DeviceObject, PIRP Irp) {
 			if (hook->Driver == driverObject && hook->MajorFunction == IRP_MJ_DEVICE_CONTROL) {
 				// found hook
 				if (hook->CompletionRoutine != nullptr) {
-					::IoSetCompletionRoutine(Irp, hook->CompletionRoutine, hook->Context, TRUE, FALSE, FALSE);
+					IoSetCompletionRoutine(Irp, hook->CompletionRoutine, hook->Context, TRUE, FALSE, FALSE);
 				}
 				matchingHookState = hook;
 				break;
 			}
+			entry = entry->Flink;
 		}
 	}
 	
@@ -119,13 +121,14 @@ VOID IrpHookManager::RestoreOriginal(const PUNICODE_STRING DriverName, ULONG Maj
 			LOG_SUCCESS_VA("Removed hook %p from list", hook);
 			break;
 		}
+		entry = entry->Flink;
 	}
 }
 
 IrpHookManager::~IrpHookManager() {
 	AutoLock<Mutex> lock(mutex);
-	while (!IsListEmpty(&(this->hooksHead))) {
-		auto* entry = RemoveHeadList(&(this->hooksHead));
+	while (!IsListEmpty(&this->hooksHead)) {
+		auto* entry = RemoveHeadList(&this->hooksHead);
 
 		// unhook and free
 		auto* hook = CONTAINING_RECORD(entry, HookState, Entry);
