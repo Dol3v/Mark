@@ -47,7 +47,11 @@ NTSTATUS IrpHookManager::HookIrpHandler(const PUNICODE_STRING DriverName, ULONG 
 	hookState->MajorFunction = MajorFunction;
 	hookState->CompletionRoutine = CompletionRoutine;
 	hookState->Context = CompletionContext;
-	::InsertHeadList(&this->hooksHead, &hookState->Entry);
+
+	{
+		AutoLock<Mutex> lock(this->mutex);
+		InsertHeadList(&this->hooksHead, &hookState->Entry);
+	}
 
 	// cleanup
 	::ObDereferenceObject(driverObject);
@@ -122,7 +126,6 @@ IrpHookManager::~IrpHookManager() {
 	AutoLock<Mutex> lock(mutex);
 	while (!IsListEmpty(&(this->hooksHead))) {
 		auto* entry = RemoveHeadList(&(this->hooksHead));
-		if (entry == &(this->hooksHead)) break; // useless but just in case
 
 		// unhook and free
 		auto* hook = CONTAINING_RECORD(entry, HookState, Entry);
