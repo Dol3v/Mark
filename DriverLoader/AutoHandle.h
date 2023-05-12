@@ -11,19 +11,20 @@ namespace Utils {
 	private:
 		HANDLE handle;
 	public:
+
+		AutoHandle() : handle(INVALID_HANDLE_VALUE) {}
+
 		AutoHandle(HANDLE handle) : handle(handle) {}
 
 		// disable copying
 		AutoHandle(const AutoHandle&) = delete;
 		AutoHandle& operator=(const AutoHandle&) = delete;
+		AutoHandle(const AutoHandle&&) = delete;
+		AutoHandle& operator=(const AutoHandle&&) = delete;
 
-		AutoHandle(const AutoHandle&& Other) noexcept {
-			this->handle = Other.handle;
-		}
-
-		AutoHandle& operator=(const AutoHandle&& Other) noexcept {
-			this->handle = Other.handle;
-			return *this;
+		void set(HANDLE newValue) {
+			if (this->handle == INVALID_HANDLE_VALUE)
+				this->handle = newValue;
 		}
 
 		HANDLE get() const { return this->handle; }
