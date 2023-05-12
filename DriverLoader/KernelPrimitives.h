@@ -37,4 +37,9 @@ private:
 		Frees any unused palettes.
 	*/
 	VOID FreeOtherPalettes(const std::vector<HPALETTE>&& Palettes);
+
+	/*
+		Accesses all palettes.
+	*/
+	VOID AccessAllPalettes(const std::vector<HPALETTE>& Palettes) const;
 };

@@ -135,6 +135,7 @@
     <ClCompile Include="Utils.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="DebugLog.h" />
     <ClInclude Include="DriverLoaderShellcode2.h" />
     <ClInclude Include="EneDriver.h" />
     <ClInclude Include="AutoHandle.h" />
