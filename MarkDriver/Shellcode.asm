@@ -12,7 +12,7 @@ GetShellcodeSize ENDP
 ; the main function
 RunShellcode PROC
     mov rax, rsp
-    mov r13, [rsp+10]   ; SystemArgument1, see ntkrla57!KiInitializeUserApc
+    mov r13, [rsp+10h]   ; SystemArgument1, see ntkrla57!KiInitializeUserApc
     and rsp, 0ffffffffffffff00h
     add rsp, 8
     push rax
